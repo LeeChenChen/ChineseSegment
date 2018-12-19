@@ -1,4 +1,4 @@
-import re
+﻿import re
 import numpy as np
 import json
 from collections import Counter,defaultdict
@@ -9,7 +9,7 @@ import sys, getopt
 
 def set_config():
     #设置在3卡上运行,占用上限50%
-    os.environ["CUDA_VISIBLE_DEVICES"]="3"
+    os.environ["CUDA_VISIBLE_DEVICES"]="0"
     config=tf.ConfigProto()
     config.gpu_options.per_process_gpu_memory_fraction=0.5
     return  config
@@ -118,9 +118,9 @@ def cnn_train(vacabulary_size,all_words,all_tags,word_id,tag2vec,config,epoch=50
     init = tf.global_variables_initializer()
     sess = tf.Session(config=config)
     
-    # sess.run(init)
-    saver=tf.train.Saver()
-    saver.restore(sess,'./model/frist_model.ckpt')
+    sess.run(init)
+    # saver=tf.train.Saver()
+    # saver.restore(sess,'./model/frist_model.ckpt')
     
     # epoch = 50
     for i in range(epoch):
@@ -153,8 +153,8 @@ def model_test(vac_size,x_data,y_data,predict=False):
     acc=tf.reduce_mean(tf.cast(correct_pre,tf.float32))
 
     if predict:
-        result = sess.run(y_pre, feed_dict={x: x_data, keep_prob: 0.5})
-        return result
+        # result = sess.run(y_pre, feed_dict={x: x_data, keep_prob: 0.5})
+        return sess,x,y_pre,keep_prob
 
     else:
         sess.run(y_pre, feed_dict={x: x_data, keep_prob: 0.5})
@@ -202,8 +202,10 @@ def cnn_seg(txt):
     trans_pro={state:np.log(num) for state,num in trans_pro.items()}
 
     txt2id=[[word_id.get(word,4735)for word in txt]]
-    result=model_test(vacabulary_size,x_data=txt2id,y_data=None,predict=True)
+    sess,x,y_pre,keep_prob=model_test(vacabulary_size,x_data=txt2id,y_data=None,predict=True)
+    result = sess.run(y_pre, feed_dict={x: txt2id, keep_prob: 1.0})
     result = result[0, :, :]
+    # print(result)
     best_path=viterbi(result,trans_pro)
 
     return  segword(txt,best_path)
@@ -231,6 +233,25 @@ if __name__ == '__main__':
         cnn_train(vacabulary_size,all_words,all_tags,word_id,tag2vec,config,epoch=10)
         
     elif mode[0] == 'test':
-        #cnn_test()
-        print(cnn_seg("但众所周知，基于字标注法的分词，需要标签语料训练，训练完之后，就适应那一批语料了，比较难拓展到新领域；又或者说，如果发现有分错的地方，则没法很快调整过来。"))
+        # 标准测试集准确率
+        # cnn_test()
+        
+        # test.txt切分
+        stops=u'，。！？（）；、：,\.!\?;:\n'
+        result = ""
+        with open("./data/test.txt",encoding='gbk',errors="ignore") as f:
+            a = cnn_seg(f.read())
+            b = []
+            for _ in a:
+                b += re.split('(['+stops+'])',_)               
+            while '' in b:
+                b.remove('')
+            result = ' '.join(b)
+            result = '\n'.join(re.split('[ ]*\n[ ]*',result))
+        file = open('result.txt','w')
+        file.write(result)
+        file.close()
+        
+        # 单一句子切分
+        # print(cnn_seg("这块地面积大"))
     
